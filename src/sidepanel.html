@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>小红书收藏整理助手</title>
+    <link rel="stylesheet" href="./sidepanel.css">
+  </head>
+  <body>
+    <div id="app" class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>收藏整理</h1>
+          <p id="syncSummary">本地优先，等待导入</p>
+        </div>
+        <button id="importButton" class="icon-button primary" title="导入当前小红书页面收藏">↻</button>
+      </header>
+
+      <section class="stats-strip" aria-label="收藏统计">
+        <div>
+          <span id="totalNotes">0</span>
+          <small>总收藏</small>
+        </div>
+        <div>
+          <span id="totalCategories">0</span>
+          <small>一级分类</small>
+        </div>
+        <div>
+          <span id="totalTopics">0</span>
+          <small>二级主题</small>
+        </div>
+      </section>
+
+      <nav class="tabs" aria-label="主导航">
+        <button class="tab active" data-tab="categories">分类</button>
+        <button class="tab" data-tab="notes">收藏</button>
+        <button class="tab" data-tab="collections">收藏夹</button>
+        <button class="tab" data-tab="settings">设置</button>
+      </nav>
+
+      <main>
+        <section id="categoriesView" class="view active-view"></section>
+        <section id="notesView" class="view"></section>
+        <section id="collectionsView" class="view"></section>
+        <section id="settingsView" class="view"></section>
+      </main>
+
+      <dialog id="noteDialog">
+        <form method="dialog" class="dialog-card">
+          <button class="dialog-close" value="cancel" title="关闭">×</button>
+          <div id="noteDialogContent"></div>
+        </form>
+      </dialog>
+
+      <div id="toast" class="toast" role="status"></div>
+    </div>
+    <script type="module" src="./sidepanel.js"></script>
+  </body>
+</html>

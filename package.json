@@ -1,0 +1,11 @@
+{
+  "name": "redbook-collection-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome extension for importing, classifying, searching, and managing Xiaohongshu collections.",
+  "type": "module",
+  "scripts": {
+    "check": "node tools/validate-extension.mjs",
+    "icons": "python3 tools/make-icons.py"
+  }
+}
