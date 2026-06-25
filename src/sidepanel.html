@@ -13,7 +13,7 @@
           <h1>收藏整理</h1>
           <p id="syncSummary">本地优先，等待导入</p>
         </div>
-        <button id="importButton" class="icon-button primary" title="导入当前小红书页面收藏">↻</button>
+        <button id="settingsButton" class="icon-button" title="设置" aria-label="设置">⚙</button>
       </header>
 
       <section class="stats-strip" aria-label="收藏统计">
@@ -27,16 +27,9 @@
         </div>
         <div>
           <span id="totalTopics">0</span>
-          <small>二级主题</small>
+          <small>子分类</small>
         </div>
       </section>
-
-      <nav class="tabs" aria-label="主导航">
-        <button class="tab active" data-tab="categories">分类</button>
-        <button class="tab" data-tab="notes">收藏</button>
-        <button class="tab" data-tab="collections">收藏夹</button>
-        <button class="tab" data-tab="settings">设置</button>
-      </nav>
 
       <main>
         <section id="categoriesView" class="view active-view"></section>
@@ -51,6 +44,16 @@
           <div id="noteDialogContent"></div>
         </form>
       </dialog>
+
+      <section id="busyOverlay" class="busy-overlay" aria-live="polite" aria-busy="true" hidden>
+        <div class="busy-panel">
+          <div class="busy-spinner" aria-hidden="true"></div>
+          <strong id="busyTitle">采集中</strong>
+          <p id="busyDetail">正在读取当前页面收藏。</p>
+          <small id="busyMeta">请保持小红书标签页打开。</small>
+          <button id="stopScanButton" class="button danger busy-stop" data-action="stop-page-scan" hidden>停止采集</button>
+        </div>
+      </section>
 
       <div id="toast" class="toast" role="status"></div>
     </div>

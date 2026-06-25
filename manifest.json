@@ -30,6 +30,16 @@
         "https://www.xiaohongshu.com/*"
       ],
       "js": [
+        "src/page-api-observer.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://www.xiaohongshu.com/*"
+      ],
+      "js": [
         "src/content-script.js"
       ],
       "run_at": "document_idle"

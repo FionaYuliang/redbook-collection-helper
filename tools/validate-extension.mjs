@@ -5,6 +5,7 @@ const requiredFiles = [
   "manifest.json",
   "src/background.js",
   "src/content-script.js",
+  "src/page-api-observer.js",
   "src/sidepanel.html",
   "src/sidepanel.css",
   "src/sidepanel.js",
@@ -24,7 +25,7 @@ for (const file of requiredFiles) {
   if (!existsSync(file)) throw new Error(`Missing required file: ${file}`);
 }
 
-for (const file of ["src/background.js", "src/content-script.js", "src/sidepanel.js"]) {
+for (const file of ["src/background.js", "src/content-script.js", "src/page-api-observer.js", "src/sidepanel.js"]) {
   const result = spawnSync(process.execPath, ["--check", file], { stdio: "inherit" });
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
