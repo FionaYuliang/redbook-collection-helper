@@ -4,6 +4,7 @@ const PING_TYPE = "XHS_COLLECTION_PING";
 const SCAN_TYPE = "XHS_COLLECTION_SCAN";
 const API_SCAN_TYPE = "XHS_COLLECTION_API_SCAN";
 const CANCEL_SCAN_TYPE = "XHS_COLLECTION_CANCEL_SCAN";
+const SCAN_PROGRESS_TYPE = "XHS_COLLECTION_SCAN_PROGRESS";
 const LOCAL_DATA_STORES = ["notes", "categories", "topics", "note_topics", "collections", "collection_notes", "meta"];
 const MAX_CATEGORY_LEVEL = 3;
 const DEFAULT_MAX_SCAN_SCROLLS = 240;
@@ -117,6 +118,7 @@ const state = {
   expandedCategories: new Set(DEFAULT_CATEGORIES.map(([id]) => id)),
   isImporting: false,
   importStatus: null,
+  scanProgress: null,
   activeImportTabId: null,
   stopRequested: false
 };
@@ -1243,10 +1245,23 @@ async function rescueOtherNotesIfNeeded(onProgress = null) {
 async function getActiveXhsTab() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const tab = tabs[0];
-  if (!tab?.id || !/^https:\/\/www\.xiaohongshu\.com\//.test(tab.url || "")) {
-    throw new Error("请先打开已登录的小红书页面，再点击导入。");
+  if (!tab?.id || !isFavoriteNotesTabUrl(tab.url || "")) {
+    throw new Error("请打开小红书收藏页：个人中心 > 收藏。");
   }
   return tab;
+}
+
+function isFavoriteNotesTabUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.hostname === "www.xiaohongshu.com" &&
+      /\/user\/profile\/[A-Za-z0-9_-]+/.test(parsed.pathname) &&
+      parsed.searchParams.get("tab") === "fav"
+    );
+  } catch {
+    return false;
+  }
 }
 
 async function sendToTab(tabId, message) {
@@ -1357,6 +1372,24 @@ function scanTimeoutMs(maxScrolls, waitMs) {
   return Math.max(MIN_SCAN_TIMEOUT_MS, Math.min(estimatedMs, MAX_SCAN_TIMEOUT_MS));
 }
 
+function progressTitle(count = 0, total = 0) {
+  return total > 0 ? `采集中（${count}/${total}）` : `采集中（${count}/?）`;
+}
+
+function updateScanProgress(progress) {
+  if (!state.isImporting || !state.activeImportTabId) return;
+  state.scanProgress = progress;
+  const count = Number(progress.count || 0);
+  const total = Number(progress.total || 0);
+  setImportStatus({
+    ...(state.importStatus || {}),
+    title: progressTitle(count, total),
+    detail: "请保持网页不变动。正在读取收藏…",
+    meta: "",
+    canStop: true
+  });
+}
+
 async function importFromCurrentTab(triggerButton = null) {
   if (state.isImporting) {
     showToast("正在刷新中，请等待本次导入完成。");
@@ -1383,12 +1416,17 @@ async function importFromCurrentTab(triggerButton = null) {
     const timeoutMs = scanTimeoutMs(maxScrolls, waitMs);
     state.activeImportTabId = tab.id;
     state.stopRequested = false;
+    state.scanProgress = null;
     const ping = await sendToTab(tab.id, { type: PING_TYPE });
     await installPageApiObserver(tab.id);
+    if (!ping?.isFavoriteNotesPage) {
+      throw new Error("请打开小红书收藏页：个人中心 > 收藏。");
+    }
     if (!ping?.loggedIn) showToast("未明确检测到登录状态，仍会尝试扫描当前页面。");
+    const expectedTotal = Number(ping?.expectedTotal || ping?.pageCounts?.favoriteNotes || ping?.pageCounts?.notes || 0);
 
     setImportStatus({
-      title: "采集中",
+      title: progressTitle(0, expectedTotal),
       detail: "请保持网页不变动。正在读取收藏…",
       meta: "",
       canStop: true
@@ -1574,6 +1612,7 @@ async function importFromCurrentTab(triggerButton = null) {
     state.isImporting = false;
     state.activeImportTabId = null;
     state.stopRequested = false;
+    state.scanProgress = null;
     setImportStatus(null);
     if (importButton) {
       importButton.disabled = false;
@@ -2272,6 +2311,13 @@ document.addEventListener("change", async (event) => {
 $("#settingsButton").addEventListener("click", () => {
   state.activeTab = state.activeTab === "settings" ? "categories" : "settings";
   render();
+});
+
+chrome.runtime.onMessage.addListener((message, sender) => {
+  if (message?.type !== SCAN_PROGRESS_TYPE) return false;
+  if (state.activeImportTabId && sender?.tab?.id && sender.tab.id !== state.activeImportTabId) return false;
+  updateScanProgress(message);
+  return false;
 });
 
 loadState()

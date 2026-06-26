@@ -2,6 +2,7 @@ const XHS_SCAN_MESSAGE = "XHS_COLLECTION_SCAN";
 const XHS_API_SCAN_MESSAGE = "XHS_COLLECTION_API_SCAN";
 const XHS_CANCEL_SCAN_MESSAGE = "XHS_COLLECTION_CANCEL_SCAN";
 const XHS_PING_MESSAGE = "XHS_COLLECTION_PING";
+const XHS_SCAN_PROGRESS_MESSAGE = "XHS_COLLECTION_SCAN_PROGRESS";
 const XHS_API_STORAGE_KEY = "__xhsCollectionApiEntries";
 const COLLECT_TIME_PATTERN =
   /((?:(?:\d{4}[-/.年]\d{1,2}(?:[-/.月]\d{1,2}日?)?)|(?:\d{1,2}[-/.月]\d{1,2}日?)|(?:今天|昨天|前天))(?:\s*(?:[T ]|日)?\d{1,2}:\d{2}(?::\d{2})?)?|(?:\d+\s*(?:分钟前|小时前|天前|周前|个月前|年前)))/;
@@ -9,6 +10,11 @@ const XHS_IMAGE_FORMATS = "jpg,webp,avif";
 const observedApiRequests = [];
 let activePageScanToken = null;
 let activeApiScanToken = null;
+
+function isFavoriteNotesPage() {
+  const params = new URLSearchParams(location.search);
+  return /\/user\/profile\/[A-Za-z0-9_-]+/.test(location.pathname) && params.get("tab") === "fav";
+}
 
 function isCollectionApiUrl(url) {
   const rawUrl = String(url || "");
@@ -66,6 +72,30 @@ function sleep(ms) {
 
 function throwIfCanceled(scanToken, message = "已停止采集") {
   if (scanToken?.canceled) throw new Error(message);
+}
+
+function assertFavoriteNotesPage() {
+  if (!isFavoriteNotesPage()) {
+    throw new Error("请打开小红书收藏页：个人中心 > 收藏。");
+  }
+}
+
+function reportScanProgress(scanToken, source, count, total = 0, force = false) {
+  const now = Date.now();
+  if (!force && scanToken && now - (scanToken.lastProgressAt || 0) < 450) return;
+  if (scanToken) scanToken.lastProgressAt = now;
+  try {
+    chrome.runtime.sendMessage({
+      type: XHS_SCAN_PROGRESS_MESSAGE,
+      source,
+      count,
+      total,
+      complete: total > 0 && count >= total,
+      url: location.href
+    });
+  } catch {
+    // The side panel may be closed; progress messages are best-effort.
+  }
 }
 
 function normalizeText(value) {
@@ -643,6 +673,7 @@ async function collectObservedApiNotesByScrolling(options = {}) {
   let stableRounds = 0;
   let previousCount = 0;
 
+  assertFavoriteNotesPage();
   window.scrollTo({ top: 0, behavior: "auto" });
   await sleep(Math.min(1200, waitMs));
 
@@ -650,6 +681,10 @@ async function collectObservedApiNotesByScrolling(options = {}) {
     const collected = mergeObservedApiNotes(notes);
     sawPayload = sawPayload || collected.sawPayload;
     sawTerminalPage = sawTerminalPage || collected.sawTerminalPage;
+    const pageCounts = readProfileCounts();
+    const expectedTotal = Number(pageCounts.favoriteNotes || pageCounts.notes || 0);
+    const countComplete = expectedTotal > 0 && notes.size >= expectedTotal;
+    reportScanProgress(scanToken, "api", notes.size, expectedTotal, countComplete);
     if (scanToken?.canceled) break;
 
     if (notes.size === previousCount) stableRounds += 1;
@@ -658,7 +693,7 @@ async function collectObservedApiNotesByScrolling(options = {}) {
 
     const scrollState = pageScrollState();
     reachedBottom = reachedBottom || scrollState.atBottom;
-    if (round >= maxScrolls || (sawTerminalPage && stableRounds >= 1) || (reachedBottom && stableRounds >= 4)) break;
+    if (round >= maxScrolls || countComplete || (sawTerminalPage && stableRounds >= 1) || (reachedBottom && stableRounds >= 4)) break;
 
     await scrollOneViewport(waitMs);
     if (scanToken?.canceled) {
@@ -672,6 +707,8 @@ async function collectObservedApiNotesByScrolling(options = {}) {
   const collected = mergeObservedApiNotes(notes);
   sawPayload = sawPayload || collected.sawPayload;
   sawTerminalPage = sawTerminalPage || collected.sawTerminalPage;
+  const finalCounts = readProfileCounts();
+  reportScanProgress(scanToken, "api", notes.size, Number(finalCounts.favoriteNotes || finalCounts.notes || 0), true);
 
   return {
     notes,
@@ -769,6 +806,7 @@ async function fetchJson(request) {
 }
 
 async function scanCollectionApi(options = {}) {
+  assertFavoriteNotesPage();
   const userId = readCurrentUserId();
   const pageSize = Math.max(10, Math.min(Number(options.pageSize || 30), 50));
   const maxPages = Math.max(1, Math.min(Number(options.maxPages || 80), 600));
@@ -837,12 +875,16 @@ async function scanCollectionApi(options = {}) {
               const note = normalizeApiNote(item);
               if (note && !notes.has(note.id)) notes.set(note.id, note);
             }
+            const pageCounts = readProfileCounts();
+            const expectedTotal = Number(pageCounts.favoriteNotes || pageCounts.notes || 0);
+            reportScanProgress(scanToken, "api", notes.size, expectedTotal, expectedTotal > 0 && notes.size >= expectedTotal);
 
             const nextCursor = String(pickApiCursor(payload) || "");
             hasMore = pickApiHasMore(payload, items.length) && nextCursor !== lastCursor && items.length > 0;
             lastCursor = cursor;
             cursor = nextCursor;
             if (!nextCursor && items.length < pageSize) hasMore = false;
+            if (expectedTotal > 0 && notes.size >= expectedTotal) hasMore = false;
           }
 
           if (notes.size) {
@@ -879,6 +921,7 @@ async function scanCollectionApi(options = {}) {
 }
 
 async function scanCollectionPage(options = {}) {
+  assertFavoriteNotesPage();
   const maxScrolls = Math.max(0, Math.min(Number(options.maxScrolls ?? 60), 600));
   const waitMs = Math.max(700, Math.min(Number(options.waitMs ?? 1200), 5000));
   const scanToken = { canceled: false };
@@ -899,6 +942,11 @@ async function scanCollectionPage(options = {}) {
       for (const note of readVisibleNotes()) seen.set(note.id, note);
       if (scanToken.canceled) break;
 
+      const pageCounts = readProfileCounts();
+      const expectedTotal = Number(pageCounts.favoriteNotes || pageCounts.notes || 0);
+      const countComplete = expectedTotal > 0 && seen.size >= expectedTotal;
+      reportScanProgress(scanToken, "page", seen.size, expectedTotal, countComplete);
+
       if (seen.size === previousCount) stableRounds += 1;
       else stableRounds = 0;
       previousCount = seen.size;
@@ -911,9 +959,6 @@ async function scanCollectionPage(options = {}) {
         bottomStableRounds = 0;
       }
 
-      const pageCounts = readProfileCounts();
-      const expectedTotal = Number(pageCounts.favoriteNotes || pageCounts.notes || 0);
-      const countComplete = expectedTotal > 0 && seen.size >= expectedTotal;
       if (round >= maxScrolls || countComplete || (physicalBottom && stableRounds >= 2 && bottomStableRounds >= 1) || stuckRounds >= 2) break;
 
       const afterScroll = await scrollOneViewport(waitMs);
@@ -933,6 +978,8 @@ async function scanCollectionPage(options = {}) {
       await waitForImagesToSettle(document, Math.min(1800, waitMs));
     }
     for (const note of readVisibleNotes()) seen.set(note.id, note);
+    const finalCounts = readProfileCounts();
+    reportScanProgress(scanToken, "page", seen.size, Number(finalCounts.favoriteNotes || finalCounts.notes || 0), true);
   } finally {
     if (activePageScanToken === scanToken) activePageScanToken = null;
   }
@@ -961,7 +1008,15 @@ async function scanCollectionPage(options = {}) {
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === XHS_PING_MESSAGE) {
-    sendResponse({ ok: true, loggedIn: pageLooksLoggedIn(), url: location.href });
+    const pageCounts = readProfileCounts();
+    sendResponse({
+      ok: true,
+      loggedIn: pageLooksLoggedIn(),
+      url: location.href,
+      isFavoriteNotesPage: isFavoriteNotesPage(),
+      pageCounts,
+      expectedTotal: Number(pageCounts.favoriteNotes || pageCounts.notes || 0)
+    });
     return false;
   }
 
