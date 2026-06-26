@@ -1,6 +1,8 @@
 (() => {
-  if (window.__xhsCollectionApiObserverInstalled) return;
+  const OBSERVER_VERSION = "response-v2";
+  if (window.__xhsCollectionApiObserverVersion === OBSERVER_VERSION) return;
   window.__xhsCollectionApiObserverInstalled = true;
+  window.__xhsCollectionApiObserverVersion = OBSERVER_VERSION;
 
   const STORAGE_KEY = "__xhsCollectionApiEntries";
   const MAX_ENTRIES = 96;

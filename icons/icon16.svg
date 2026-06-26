@@ -1,4 +1,3 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-  <rect width="16" height="16" rx="4" fill="#d84b3a"/>
-  <path d="M4 4.8h8M4 8h6.8M4 11.2h4.4" stroke="#fffaf3" stroke-width="1.5" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 128 128" shape-rendering="geometricPrecision">
+  <polygon points="64.0,3.8 81.7,39.7 121.2,45.4 92.6,73.3 99.4,112.7 64.0,94.1 28.6,112.7 35.4,73.3 6.8,45.4 46.3,39.7" fill="#fdbc60" stroke="#fdbc60" stroke-width="7" stroke-linejoin="round"/>
 </svg>

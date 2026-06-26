@@ -1280,37 +1280,7 @@ async function installPageApiObserver(tabId) {
   await chrome.scripting.executeScript({
     target: { tabId },
     world: "MAIN",
-    func: () => {
-      if (window.__xhsCollectionApiObserverInstalled) return;
-      window.__xhsCollectionApiObserverInstalled = true;
-      const publish = (detail) => {
-        try {
-          const url = String(detail.url || "");
-          if (!/\/api\/sns\/web\//.test(url) || !/collect|favorite|fav/i.test(url)) return;
-          window.dispatchEvent(new CustomEvent("XHS_COLLECTION_API_OBSERVED", { detail }));
-        } catch {
-          // Ignore observer errors; the extension can still use performance entries.
-        }
-      };
-      const originalFetch = window.fetch;
-      if (typeof originalFetch === "function") {
-        window.fetch = function(input, init = {}) {
-          const url = typeof input === "string" ? input : input && input.url;
-          publish({ url, method: init.method || (input && input.method) || "GET", body: typeof init.body === "string" ? init.body : "" });
-          return originalFetch.apply(this, arguments);
-        };
-      }
-      const originalOpen = XMLHttpRequest.prototype.open;
-      const originalSend = XMLHttpRequest.prototype.send;
-      XMLHttpRequest.prototype.open = function(method, url) {
-        this.__xhsCollectionRequest = { method, url };
-        return originalOpen.apply(this, arguments);
-      };
-      XMLHttpRequest.prototype.send = function(body) {
-        publish({ ...(this.__xhsCollectionRequest || {}), body: typeof body === "string" ? body : "" });
-        return originalSend.apply(this, arguments);
-      };
-    }
+    files: ["src/page-api-observer.js"]
   });
 }
 
